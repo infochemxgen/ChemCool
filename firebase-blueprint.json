@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and subscription data",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "subscriptionStatus": { "type": "string", "enum": ["active", "canceled", "past_due", "trialing", "none"] },
+        "tier": { "type": "string", "enum": ["starter", "pro", "enterprise", "none"] },
+        "stripeCustomerId": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "subscriptionStatus"]
+    },
+    "Analysis": {
+      "title": "Analysis",
+      "description": "Chemical analysis result",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "compoundName": { "type": "string" },
+        "formula": { "type": "string" },
+        "molecularWeight": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "processing", "completed", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "compoundName", "status"]
+    },
+    "InventoryItem": {
+      "title": "InventoryItem",
+      "description": "A chemical in the company's inventory",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "chemicalName": { "type": "string" },
+        "casNumber": { "type": "string" },
+        "regulatoryStatus": { "type": "string", "enum": ["safe", "restricted", "banned", "monitoring"] },
+        "quantity": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "chemicalName", "regulatoryStatus"]
+    },
+    "RegulatoryAlert": {
+      "title": "RegulatoryAlert",
+      "description": "Automated alert for a chemical",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "chemicalId": { "type": "string" },
+        "chemicalName": { "type": "string" },
+        "message": { "type": "string" },
+        "severity": { "type": "string", "enum": ["warning", "critical", "info"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "chemicalId", "message", "severity"]
+    },
+    "ProductPassport": {
+      "title": "ProductPassport",
+      "description": "Digital Product Passport for a batch",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "chemicalId": { "type": "string" },
+        "chemicalName": { "type": "string" },
+        "batchNumber": { "type": "string" },
+        "verificationHash": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "chemicalId", "batchNumber", "verificationHash"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles"
+    },
+    "inventory/{itemId}": {
+      "schema": { "$ref": "#/entities/InventoryItem" },
+      "description": "Stores chemical inventory"
+    },
+    "alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/RegulatoryAlert" },
+      "description": "Stores regulatory alerts"
+    },
+    "passports/{passportId}": {
+      "schema": { "$ref": "#/entities/ProductPassport" },
+      "description": "Stores digital product passports"
+    },
+    "analyses/{analysisId}": {
+      "schema": { "$ref": "#/entities/Analysis" },
+      "description": "Stores chemical analysis results"
+    }
+  }
+}

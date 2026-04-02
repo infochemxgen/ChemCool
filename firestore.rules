@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId} (matches request.auth.uid)
+    // Fields:
+    //   - userId: string (required, immutable)
+    //   - email: string (required)
+    //   - companyName: string (optional)
+    //   - subscriptionStatus: string (enum: active, canceled, past_due, trialing, none)
+    //   - tier: string (enum: starter, pro, enterprise, none)
+    //   - stripeCustomerId: string (optional)
+    //   - createdAt: string (ISO 8601)
+    //
+    // Collection: inventory
+    // Fields:
+    //   - userId: string (required, immutable)
+    //   - chemicalName: string (required, max 100 chars)
+    //   - casNumber: string (required)
+    //   - regulatoryStatus: string (enum: safe, restricted, banned, monitoring, unknown)
+    //   - quantity: number (required, positive)
+    //   - createdAt: string (ISO 8601)
+    //
+    // Collection: analyses
+    // Fields:
+    //   - userId: string (required, immutable)
+    //   - compoundName: string (required, max 100 chars)
+    //   - formula: string (optional)
+    //   - molecularWeight: number (optional)
+    //   - status: string (enum: pending, processing, completed, failed)
+    //   - createdAt: string (ISO 8601)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "info.chemxgen@gmail.com" && request.auth.token.email_verified == true));
+    }
+    
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+    
+    function uidNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() > 0 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.subscriptionStatus in ['active', 'canceled', 'past_due', 'trialing', 'none'] &&
+             (!('tier' in data) || data.tier in ['starter', 'pro', 'enterprise', 'none']) &&
+             (!('createdAt' in data) || isValidDateString(data.createdAt));
+    }
+
+    function isValidInventory(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.chemicalName is string && data.chemicalName.size() > 0 && data.chemicalName.size() <= 100 &&
+             data.regulatoryStatus in ['safe', 'restricted', 'banned', 'monitoring', 'unknown'] &&
+             data.quantity is number && data.quantity >= 0 &&
+             (!('createdAt' in data) || isValidDateString(data.createdAt));
+    }
+
+    function isValidAnalysis(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.compoundName is string && data.compoundName.size() > 0 && data.compoundName.size() <= 100 &&
+             data.status in ['pending', 'processing', 'completed', 'failed'] &&
+             (!('molecularWeight' in data) || data.molecularWeight is number) &&
+             (!('createdAt' in data) || isValidDateString(data.createdAt));
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged();
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && uidNotModified() && 
+                      (request.resource.data.role == resource.data.role || !('role' in resource.data))) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Inventory Collection
+    match /inventory/{itemId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidInventory(request.resource.data);
+      allow update: if (isDocOwner() && isValidInventory(request.resource.data) && uidNotModified()) || isAdmin();
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // Alerts Collection
+    match /alerts/{alertId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if (isDocOwner() && uidNotModified()) || isAdmin();
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // Passports Collection
+    match /passports/{passportId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if (isDocOwner() && uidNotModified()) || isAdmin();
+      allow delete: if isDocOwner() || isAdmin();
+    }
+    
+    // Analyses Collection
+    match /analyses/{analysisId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidAnalysis(request.resource.data);
+      allow update: if (isDocOwner() && isValidAnalysis(request.resource.data) && uidNotModified()) || isAdmin();
+      allow delete: if isDocOwner() || isAdmin();
+    }
+  }
+}
